@@ -170,6 +170,25 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+// Double-click to toggle fullscreen
+let lastClickTime = 0;
+video.addEventListener('click', (e) => {
+  const now = Date.now();
+  if (now - lastClickTime < 300) {
+    e.preventDefault();
+    toggleFullscreen();
+  }
+  lastClickTime = now;
+});
+
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  } else {
+    document.exitFullscreen().catch(() => {});
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Auto Scan
 // ---------------------------------------------------------------------------

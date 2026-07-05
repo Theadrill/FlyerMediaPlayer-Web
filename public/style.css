@@ -5,8 +5,8 @@
 }
 
 html, body {
-  width: 1920px;
-  height: 1080px;
+  width: 100vw;
+  height: 100vh;
   overflow: hidden;
   background: #000;
   font-family: 'Segoe UI', -apple-system, sans-serif;
@@ -38,15 +38,15 @@ video {
 }
 
 #status-msg {
-  font-size: 48px;
+  font-size: clamp(20px, 3.5vw, 64px);
   font-weight: 600;
-  letter-spacing: 2px;
+  letter-spacing: 0.1em;
   animation: pulse 2s ease-in-out infinite;
 }
 
 #status-sub {
-  margin-top: 16px;
-  font-size: 24px;
+  margin-top: 1vh;
+  font-size: clamp(12px, 1.8vw, 32px);
   color: #888;
 }
 
