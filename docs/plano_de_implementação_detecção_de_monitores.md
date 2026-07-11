@@ -209,7 +209,7 @@ start.bat
 │  │                                             │ │
 │  │           [PLAYER EM FULLSCREEN]            │ │
 │  │                                             │ │
-│  │    MARIA VIDEO → random → random → MARIA    │ │
+│  │    MAIN VIDEO → random → random → MAIN    │ │
 │  │                                             │ │
 │  └─────────────────────────────────────────────┘ │
 │                                                  │

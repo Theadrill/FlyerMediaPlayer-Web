@@ -4,10 +4,10 @@
 
 Portar o app Android `FlyerMediaPlayer` (Digital Signage para Android TV) para uma
 solução web que roda como **fonte HTML no OBS Studio** (via plugin de navegador).
-O player escaneia um pendrive, encontra o vídeo com "MARIA" no nome na raiz,
+O player escaneia um pendrive, encontra o vídeo com "MAIN" no nome na raiz,
 cataloga os vídeos da pasta `VIDEOS` e executa o fluxo:
 
-**1 MARIA (completo) → 2 aleatórios (máx 8min cada) → repete**
+**1 MAIN (completo) → 2 aleatórios (máx 8min cada) → repete**
 
 Além disso, oferece um painel de controle de cenas do OBS acessível remotamente
 via celular.
@@ -20,8 +20,8 @@ via celular.
 [Pendrive E:, F:, ...]          [Node.js Server :4600]          [OBS Studio]
        |                               |                              |
        |  (leitura direta)             |  (Express + WebSocket)       |
-       +--- D:\VIDEOS\*.mp4 ---------->+                              |
-       +--- D:\MARIA*.mp4 ------------>+                              |
++--- D:\VIDEOS\*.mp4 ---------->+                              |
+        +--- D:\MAIN*.mp4 ------------>+                              |
                                        |                              |
                                        +--- HTTP localhost:4600 ----->+  Browser Source (player)
                                        |                              |
@@ -79,7 +79,7 @@ C:\PROJETOS\FlyerMediaPlayer-Web\
 |--------|------|-----------|----------|
 | GET | `/` | Página do player | `index.html` |
 | GET | `/cenas` | Painel de controle de cenas | `cenas.html` |
-| GET | `/api/scan` | Escaneia drives e retorna vídeos | `{status, maria[], random[], drive}` |
+| GET | `/api/scan` | Escaneia drives e retorna vídeos | `{status, main[], random[], drive}` |
 | GET | `/api/video?path=...` | Stream de vídeo com range requests | `video/mp4` (stream) |
 | GET | `/api/obs/scenes` | Lista cenas do OBS | `{scenes[], activeScene, connected}` |
 | POST | `/api/obs/switch-scene` | Troca para cena específica | `{success}` |
@@ -90,12 +90,12 @@ C:\PROJETOS\FlyerMediaPlayer-Web\
 1. Lista drives A:-Z: via `wmic logicaldisk get caption`
 2. Filtra: remove C:, D:
 3. Para cada drive restante (em ordem alfabética):
-   a. Verifica se existe na raiz arquivo .mp4 contendo "MARIA" no nome
+   a. Verifica se existe na raiz arquivo .mp4 contendo "MAIN" no nome
    b. Se sim → este é o drive do pendrive
    c. Procura pasta VIDEOS (ou videos) na raiz
    d. Lista todos os .mp4 dentro (apenas raiz da pasta, sem subpastas)
-   e. Retorna { maria[], random[], drive }
-4. Se nenhum drive com MARIA encontrado → { status: "waiting" }
+   e. Retorna { main[], random[], drive }
+4. Se nenhum drive com MAIN encontrado → { status: "waiting" }
 ```
 
 ### Video Streaming com Range Requests
@@ -134,14 +134,14 @@ Pagina carrega
        │    └─ esconde video, mostra "Aguardando Pen Drive"
        │    └─ setTimeout(autoScan, 2000)
        │
-       └─ /api/scan → {status:"found", maria, random, drive}
+       └─ /api/scan → {status:"found", main, random, drive}
             └─ esconde status, mostra video
             └─ buildQueues()
-            └─ playMaria()
+            └─ playMain()
 
-playMaria():
-  se filaMaria vazia → shuffle(listaMaria)
-  video.src = /api/video?path=mariaQueue.shift()
+playMain():
+  se filaMain vazia → shuffle(listaMain)
+  video.src = /api/video?path=mainQueue.shift()
   video.play()
   no ended → playRandom()
 
@@ -154,7 +154,7 @@ playRandom():
   no ended → limpa setTimeout → decide()
 
 decide():
-  se videosAleatoriosTocados >= 2 → playMaria()
+  se videosAleatoriosTocados >= 2 → playMain()
   senao → playRandom()
 
 forcarProximo():
@@ -178,7 +178,7 @@ onVideoError → autoScan()  # Pen drive removido
 - `<video>` ocupa 100% da tela, `object-fit: contain`
 - Overlay "Aguardando Pen Drive" centralizado quando sem drive
 - Barra de progresso horizontal fina no canto inferior:
-  - Vídeos MARIA: barra até o fim do vídeo
+  - Vídeos MAIN: barra até o fim do vídeo
   - Vídeos aleatórios: barra vai até 8 minutos
 - Sem botões visíveis (auto-start)
 
@@ -265,11 +265,11 @@ Exemplo: `http://192.168.1.100:4600/cenas`
 |----------|---------------|
 | Pen drive removido durante playback | Erro no `<video>` → `autoScan()` → modo "Aguardando" |
 | Pen drive reconectado | Polling 2s detecta → escaneia → inicia playback |
-| Nenhum MARIA encontrado | Mostra "Nenhum vídeo MARIA encontrado" |
-| Pasta VIDEOS vazia | Só toca MARIA em loop |
+| Nenhum MAIN encontrado | Mostra "Nenhum vídeo MAIN encontrado" |
+| Pasta VIDEOS vazia | Só toca MAIN em loop |
 | OBS WebSocket offline | `/cenas` mostra "Desconectado" |
 | OBS fecha/reinicia | Auto-reconnect do WebSocket |
-| Vários drives com MARIA | Usa o primeiro encontrado (ordem alfabética E:, F:, ...) |
+| Vários drives com MAIN | Usa o primeiro encontrado (ordem alfabética E:, F:, ...) |
 
 ---
 

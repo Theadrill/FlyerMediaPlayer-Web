@@ -37,12 +37,28 @@ let currentCaptureMs = DEFAULT_CAPTURE_INTERVAL_MS;
 // ---------------------------------------------------------------------------
 // Wait Window (1 display - "Aguardando segundo monitor")
 // ---------------------------------------------------------------------------
+let waitWindowState = 'waiting'; // 'waiting', 'main-missing', 'videos-folder-missing', 'both-missing'
+
+function getWaitWindowHeight(state) {
+  switch (state) {
+    case 'both-missing':
+      return 240; // Error + 2 inputs + restart button
+    case 'main-missing':
+    case 'videos-folder-missing':
+      return 200; // Error + 1 input + restart button
+    default:
+      return 100; // Just "Aguardando segundo monitor" + restart button
+  }
+}
+
 function createWaitWindow() {
   if (waitWindow && !waitWindow.isDestroyed()) return;
 
+  const height = getWaitWindowHeight(waitWindowState);
+
   waitWindow = new BrowserWindow({
-    width: 300,
-    height: 100,
+    width: 380,
+    height: height,
     frame: true,
     alwaysOnTop: false,
     resizable: false,
@@ -59,7 +75,9 @@ function createWaitWindow() {
 
   waitWindow.setMenu(null);
 
-  waitWindow.loadFile(path.join(__dirname, 'public', 'wait.html'));
+  // Load from server to allow fetch to /api endpoints (same-origin)
+  const waitUrl = `${SERVER_URL}/wait.html?state=${waitWindowState}`;
+  waitWindow.loadURL(waitUrl);
 
   waitWindow.on('closed', () => {
     waitWindow = null;
@@ -269,6 +287,26 @@ ipcMain.on('advance-video', () => {
     console.log('[Electron] Advance request received from preview');
     playerWindow.webContents.executeJavaScript('advanceToNext()').catch(() => {});
   }
+});
+
+ipcMain.on('media-error', (_, state) => {
+  console.log(`[Electron] Erro de midia (${state}) - mostrando janela de espera com erro`);
+  // Aceita estados: 'main-missing', 'videos-folder-missing', 'both-missing'
+  const validStates = ['main-missing', 'videos-folder-missing', 'both-missing'];
+  if (!validStates.includes(state)) {
+    state = 'main-missing';
+  }
+  waitWindowState = state;
+  closePlayerWindow();
+  closeWaitWindow();
+  createWaitWindow();
+});
+
+ipcMain.on('main-video-found', () => {
+  console.log('[Electron] Midia encontrada - abrindo player');
+  waitWindowState = 'waiting';
+  closeWaitWindow();
+  handleDisplays();
 });
 
 // ---------------------------------------------------------------------------

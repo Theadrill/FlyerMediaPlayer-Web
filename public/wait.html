@@ -18,32 +18,380 @@
       height: 100vh;
       text-align: center;
       user-select: none;
+      padding: 16px;
     }
     .msg {
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 500;
       letter-spacing: 0.5px;
-      opacity: 0.8;
+      opacity: 0.9;
+      min-height: 18px;
+      line-height: 1.3;
+    }
+    .msg.error {
+      color: #ff6b6b;
+    }
+    .config-container {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+    }
+    .config-container.visible {
+      display: flex;
+    }
+    .input-group {
+      display: flex;
+      gap: 6px;
+      width: 100%;
+      align-items: center;
+    }
+    .input-group label {
+      font-size: 10px;
+      color: #aaa;
+      min-width: 70px;
+      text-align: left;
+    }
+    .input-group input {
+      flex: 1;
+      padding: 5px 8px;
+      font-size: 11px;
+      border: 1px solid #555;
+      border-radius: 3px;
+      background: #222;
+      color: #fff;
+      outline: none;
+      min-width: 0;
+    }
+    .input-group input:focus {
+      border-color: #888;
+    }
+    .btn-save {
+      background: #2a5a2a;
+      color: #fff;
+      border: 1px solid #3a7a3a;
+      padding: 5px 12px;
+      font-size: 11px;
+      cursor: pointer;
+      border-radius: 3px;
+      white-space: nowrap;
+    }
+    .btn-save:hover {
+      background: #3a7a3a;
+    }
+    .btn-save:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
     }
     .btn-restart {
       background: #333;
       color: #fff;
       border: 1px solid #555;
-      padding: 6px 16px;
-      font-size: 12px;
+      padding: 5px 14px;
+      font-size: 11px;
       cursor: pointer;
-      border-radius: 4px;
+      border-radius: 3px;
     }
     .btn-restart:hover {
       background: #444;
     }
+    .error-msg {
+      color: #ff6b6b;
+      font-size: 10px;
+      min-height: 12px;
+    }
   </style>
 </head>
 <body>
-  <div class="msg">Aguardando segundo monitor</div>
-  <button class="btn-restart" onclick="window.electronAPI.restart()">Reiniciar</button>
+  <div class="msg" id="msg">Aguardando segundo monitor</div>
+
+  <div class="config-container" id="configContainer">
+    <div class="input-group" id="mainInputGroup" style="display: none;">
+      <label>Principal:</label>
+      <input type="text" id="mainVideoNameInput" placeholder="Nome do arquivo principal (ex: MAIN)" />
+      <button class="btn-save" id="btnSaveMain" onclick="saveMainVideoName()">Salvar</button>
+    </div>
+    <div class="input-group" id="folderInputGroup" style="display: none;">
+      <label>Pasta:</label>
+      <input type="text" id="videosFolderInput" placeholder="Nome da pasta de vídeos (ex: videos)" />
+      <button class="btn-save" id="btnSaveFolder" onclick="saveVideosFolder()">Salvar</button>
+    </div>
+    <div class="input-group" id="bothInputGroup" style="display: none;">
+      <label>Principal:</label>
+      <input type="text" id="mainVideoNameInputBoth" placeholder="Nome do arquivo principal" />
+    </div>
+    <div class="input-group" id="bothInputGroup2" style="display: none;">
+      <label>Pasta:</label>
+      <input type="text" id="videosFolderInputBoth" placeholder="Nome da pasta de vídeos" />
+      <button class="btn-save" id="btnSaveBoth" onclick="saveBoth()">Salvar</button>
+    </div>
+    <div class="error-msg" id="errorMsg"></div>
+  </div>
+
+  <button class="btn-restart" id="btnRestart" onclick="window.electronAPI.restart()">Reiniciar</button>
+
   <script>
-    // fallback caso preload nao carregue
+    let currentState = 'waiting';
+
+    async function loadConfig() {
+      try {
+        const res = await fetch('/api/config');
+        const data = await res.json();
+        if (data.mainVideoName) {
+          const input1 = document.getElementById('mainVideoNameInput');
+          const input2 = document.getElementById('mainVideoNameInputBoth');
+          if (input1) input1.value = data.mainVideoName;
+          if (input2) input2.value = data.mainVideoName;
+        }
+        if (data.videosFolder) {
+          const input1 = document.getElementById('videosFolderInput');
+          const input2 = document.getElementById('videosFolderInputBoth');
+          if (input1) input1.value = data.videosFolder;
+          if (input2) input2.value = data.videosFolder;
+        }
+      } catch (err) {
+        console.error('Erro ao carregar configuração:', err);
+      }
+    }
+
+    async function checkScanAfterUpdate() {
+      try {
+        const res = await fetch('/api/scan');
+        const data = await res.json();
+        if (data.status === 'found') {
+          if (window.electronAPI && window.electronAPI.sendMainVideoFound) {
+            window.electronAPI.sendMainVideoFound();
+          }
+          return { found: true, status: data.status };
+        }
+        return { found: false, status: data.status };
+      } catch (err) {
+        console.error('Erro ao escanear:', err);
+        return { found: false, status: 'error' };
+      }
+    }
+
+    function setError(msg) {
+      document.getElementById('errorMsg').textContent = msg;
+    }
+
+    function setSaveButtonState(btn, disabled, text) {
+      btn.disabled = disabled;
+      btn.textContent = text;
+    }
+
+    async function saveMainVideoName() {
+      const input = document.getElementById('mainVideoNameInput');
+      const btn = document.getElementById('btnSaveMain');
+      const name = input.value.trim().toUpperCase();
+
+      if (!name) {
+        setError('Digite um nome válido');
+        return;
+      }
+
+      setSaveButtonState(btn, true, 'Salvando...');
+      setError('');
+
+      try {
+        const res = await fetch('/api/config/main-video-name', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name })
+        });
+        const data = await res.json();
+        if (data.success) {
+          setSaveButtonState(btn, true, 'Verificando...');
+          const result = await checkScanAfterUpdate();
+          if (result.found) {
+            return;
+          }
+          // Ainda não encontrado - atualiza estado
+          handleScanResult(result.status);
+        } else {
+          setError(data.error || 'Erro ao salvar');
+          setSaveButtonState(btn, false, 'Salvar');
+        }
+      } catch (err) {
+        setError('Erro de conexão: ' + err.message);
+        setSaveButtonState(btn, false, 'Salvar');
+      }
+    }
+
+    async function saveVideosFolder() {
+      const input = document.getElementById('videosFolderInput');
+      const btn = document.getElementById('btnSaveFolder');
+      const name = input.value.trim().toLowerCase();
+
+      if (!name) {
+        setError('Digite um nome válido');
+        return;
+      }
+
+      setSaveButtonState(btn, true, 'Salvando...');
+      setError('');
+
+      try {
+        const res = await fetch('/api/config/videos-folder', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name })
+        });
+        const data = await res.json();
+        if (data.success) {
+          setSaveButtonState(btn, true, 'Verificando...');
+          const result = await checkScanAfterUpdate();
+          if (result.found) {
+            return;
+          }
+          handleScanResult(result.status);
+        } else {
+          setError(data.error || 'Erro ao salvar');
+          setSaveButtonState(btn, false, 'Salvar');
+        }
+      } catch (err) {
+        setError('Erro de conexão: ' + err.message);
+        setSaveButtonState(btn, false, 'Salvar');
+      }
+    }
+
+    async function saveBoth() {
+      const mainInput = document.getElementById('mainVideoNameInputBoth');
+      const folderInput = document.getElementById('videosFolderInputBoth');
+      const btn = document.getElementById('btnSaveBoth');
+      const mainName = mainInput.value.trim().toUpperCase();
+      const folderName = folderInput.value.trim().toLowerCase();
+
+      if (!mainName || !folderName) {
+        setError('Preencha os dois campos');
+        return;
+      }
+
+      setSaveButtonState(btn, true, 'Salvando...');
+      setError('');
+
+      try {
+        const res = await fetch('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mainVideoName: mainName, videosFolder: folderName })
+        });
+        const data = await res.json();
+        if (data.success) {
+          setSaveButtonState(btn, true, 'Verificando...');
+          const result = await checkScanAfterUpdate();
+          if (result.found) {
+            return;
+          }
+          handleScanResult(result.status);
+        } else {
+          setError(data.error || 'Erro ao salvar');
+          setSaveButtonState(btn, false, 'Salvar');
+        }
+      } catch (err) {
+        setError('Erro de conexão: ' + err.message);
+        setSaveButtonState(btn, false, 'Salvar');
+      }
+    }
+
+    function handleScanResult(status) {
+      const msgEl = document.getElementById('msg');
+      const configContainer = document.getElementById('configContainer');
+      const mainGroup = document.getElementById('mainInputGroup');
+      const folderGroup = document.getElementById('folderInputGroup');
+      const bothGroup = document.getElementById('bothInputGroup');
+      const bothGroup2 = document.getElementById('bothInputGroup2');
+
+      // Reset all
+      mainGroup.style.display = 'none';
+      folderGroup.style.display = 'none';
+      bothGroup.style.display = 'none';
+      bothGroup2.style.display = 'none';
+
+      // Reset save buttons
+      setSaveButtonState(document.getElementById('btnSaveMain'), false, 'Salvar');
+      setSaveButtonState(document.getElementById('btnSaveFolder'), false, 'Salvar');
+      setSaveButtonState(document.getElementById('btnSaveBoth'), false, 'Salvar');
+
+      if (status === 'main-missing') {
+        msgEl.textContent = 'ARQUIVO PRINCIPAL NÃO ENCONTRADO';
+        msgEl.classList.add('error');
+        mainGroup.style.display = 'flex';
+        configContainer.classList.add('visible');
+        setError('Arquivo principal ainda não encontrado. Verifique o nome.');
+      } else if (status === 'videos-folder-missing') {
+        msgEl.textContent = 'PASTA DE VÍDEOS NÃO ENCONTRADA';
+        msgEl.classList.add('error');
+        folderGroup.style.display = 'flex';
+        configContainer.classList.add('visible');
+        setError('Pasta de vídeos ainda não encontrada. Verifique o nome.');
+      } else if (status === 'both-missing') {
+        msgEl.textContent = 'VÍDEO PRINCIPAL E PASTA DE VÍDEOS ALEATÓRIOS NÃO ENCONTRADOS';
+        msgEl.classList.add('error');
+        bothGroup.style.display = 'flex';
+        bothGroup2.style.display = 'flex';
+        configContainer.classList.add('visible');
+        setError('Verifique os dois campos e tente novamente.');
+      } else {
+        setError('Erro desconhecido ao escanear.');
+      }
+
+      loadConfig();
+    }
+
+    function showState(state) {
+      currentState = state;
+      const msgEl = document.getElementById('msg');
+      const configContainer = document.getElementById('configContainer');
+      const mainGroup = document.getElementById('mainInputGroup');
+      const folderGroup = document.getElementById('folderInputGroup');
+      const bothGroup = document.getElementById('bothInputGroup');
+      const bothGroup2 = document.getElementById('bothInputGroup2');
+
+      // Reset all
+      mainGroup.style.display = 'none';
+      folderGroup.style.display = 'none';
+      bothGroup.style.display = 'none';
+      bothGroup2.style.display = 'none';
+
+      if (state === 'main-missing') {
+        msgEl.textContent = 'ARQUIVO PRINCIPAL NÃO ENCONTRADO';
+        msgEl.classList.add('error');
+        mainGroup.style.display = 'flex';
+        configContainer.classList.add('visible');
+        setError('');
+      } else if (state === 'videos-folder-missing') {
+        msgEl.textContent = 'PASTA DE VÍDEOS NÃO ENCONTRADA';
+        msgEl.classList.add('error');
+        folderGroup.style.display = 'flex';
+        configContainer.classList.add('visible');
+        setError('');
+      } else if (state === 'both-missing') {
+        msgEl.textContent = 'VÍDEO PRINCIPAL E PASTA DE VÍDEOS ALEATÓRIOS NÃO ENCONTRADOS';
+        msgEl.classList.add('error');
+        bothGroup.style.display = 'flex';
+        bothGroup2.style.display = 'flex';
+        configContainer.classList.add('visible');
+        setError('');
+      } else {
+        msgEl.textContent = 'Aguardando segundo monitor';
+        msgEl.classList.remove('error');
+        configContainer.classList.remove('visible');
+        setError('');
+      }
+
+      loadConfig();
+    }
+
+    // Expose to Electron via preload
+    window.showState = showState;
+    window.handleScanResult = handleScanResult;
+
+    // Check state from query parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    const state = urlParams.get('state') || 'waiting';
+    showState(state);
   </script>
 </body>
 </html>

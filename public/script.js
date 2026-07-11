@@ -4,11 +4,11 @@ const statusMsg = document.getElementById('status-msg');
 const statusSub = document.getElementById('status-sub');
 const progressFill = document.getElementById('progress-fill');
 
-let mariaVideos = [];
+let mainVideos = [];
 let randomVideos = [];
-let mariaQueue = [];
+let mainQueue = [];
 let randomQueue = [];
-let playingMaria = false;
+let playingMain = false;
 let randomPlayedCount = 0;
 let currentCutTimer = null;
 let currentProgressTimer = null;
@@ -90,21 +90,21 @@ function clearCutTimer() {
 // ---------------------------------------------------------------------------
 // Playback Logic
 // ---------------------------------------------------------------------------
-function playMaria() {
-  playingMaria = true;
+function playMain() {
+  playingMain = true;
   randomPlayedCount = 0;
   clearCutTimer();
 
-  if (mariaQueue.length === 0) {
-    mariaQueue = shuffle(mariaVideos);
+  if (mainQueue.length === 0) {
+    mainQueue = shuffle(mainVideos);
   }
 
-  const videoPath = mariaQueue.shift();
+  const videoPath = mainQueue.shift();
   loadAndPlay(videoPath);
 }
 
 function playRandom() {
-  playingMaria = false;
+  playingMain = false;
   randomPlayedCount++;
 
   if (randomQueue.length === 0) {
@@ -130,11 +130,11 @@ function advanceToNext() {
   clearCutTimer();
   stopProgress();
 
-  if (playingMaria) {
+  if (playingMain) {
     playRandom();
   } else {
     if (randomPlayedCount >= 2) {
-      playMaria();
+      playMain();
     } else {
       playRandom();
     }
@@ -251,19 +251,45 @@ async function autoScan() {
       return;
     }
 
-    mariaVideos = data.maria;
-    randomVideos = data.random;
-
-    if (mariaVideos.length === 0) {
-      showError('Nenhum v\u00eddeo MARIA encontrado');
-      setTimeout(autoScan, POLL_INTERVAL_MS);
+    if (data.status === 'main-missing') {
+      if (window.electronAPI && window.electronAPI.sendMainVideoMissing) {
+        window.electronAPI.sendMainVideoMissing();
+      }
+      showError('ARQUIVO DE VIDEO PRINCIPAL NÃO ENCONTRADO');
       return;
     }
 
-    mariaQueue = shuffle(mariaVideos);
+    if (data.status === 'videos-folder-missing') {
+      if (window.electronAPI && window.electronAPI.sendVideosFolderMissing) {
+        window.electronAPI.sendVideosFolderMissing();
+      }
+      showError('PASTA DE VÍDEOS NÃO ENCONTRADA');
+      return;
+    }
+
+    if (data.status === 'both-missing') {
+      if (window.electronAPI && window.electronAPI.sendBothMissing) {
+        window.electronAPI.sendBothMissing();
+      }
+      showError('VÍDEO PRINCIPAL E PASTA DE VÍDEOS NÃO ENCONTRADOS');
+      return;
+    }
+
+    mainVideos = data.main;
+    randomVideos = data.random;
+
+    if (mainVideos.length === 0) {
+      if (window.electronAPI && window.electronAPI.sendMainVideoMissing) {
+        window.electronAPI.sendMainVideoMissing();
+      }
+      showError('ARQUIVO DE VIDEO PRINCIPAL NÃO ENCONTRADO');
+      return;
+    }
+
+    mainQueue = shuffle(mainVideos);
     randomQueue = shuffle(randomVideos);
     showPlaying();
-    playMaria();
+    playMain();
   } catch (err) {
     showError('Erro ao escanear: ' + err.message);
     setTimeout(autoScan, POLL_INTERVAL_MS);

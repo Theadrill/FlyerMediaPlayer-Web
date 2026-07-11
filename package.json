@@ -1,7 +1,7 @@
 {
   "name": "flyermediaplayer-web",
   "version": "1.0.0",
-  "description": "Digital signage player - plays videos from USB drive in MARIA→random→random loop",
+  "description": "Digital signage player - plays videos from USB drive in MAIN→random→random loop",
   "main": "electron-main.js",
   "scripts": {
     "start": "node server.js",

@@ -10,6 +10,38 @@ const SKIP_DRIVES = ['C', 'D'];
 const VIDEO_EXTENSIONS = ['.mp4'];
 
 // ---------------------------------------------------------------------------
+// Config
+// ---------------------------------------------------------------------------
+const CONFIG_PATH = path.join(__dirname, 'config.json');
+
+function loadConfig() {
+  try {
+    const raw = fs.readFileSync(CONFIG_PATH, 'utf8');
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+}
+
+function saveConfig(config) {
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf8');
+}
+
+function getMainVideoName() {
+  const config = loadConfig();
+  return (config.media && typeof config.media.mainVideoName === 'string')
+    ? config.media.mainVideoName.toUpperCase()
+    : 'MAIN';
+}
+
+function getVideosFolderName() {
+  const config = loadConfig();
+  return (config.media && typeof config.media.videosFolder === 'string')
+    ? config.media.videosFolder.toLowerCase()
+    : 'videos';
+}
+
+// ---------------------------------------------------------------------------
 // Drive Scanning
 // ---------------------------------------------------------------------------
 function getAvailableDrives() {
@@ -28,10 +60,30 @@ function getAvailableDrives() {
   }
 }
 
+function findVideosFolder(root, folderName) {
+  try {
+    const entries = fs.readdirSync(root, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        console.log(`[Scan] Pasta encontrada: "${entry.name}" vs "${folderName}" → match: ${entry.name.toLowerCase() === folderName.toLowerCase()}`);
+        if (entry.name.toLowerCase() === folderName.toLowerCase()) {
+          return path.join(root, entry.name);
+        }
+      }
+    }
+  } catch {
+    // ignored
+  }
+  return null;
+}
+
 function scanDrive(driveLetter) {
   const root = `${driveLetter}:\\`;
-  const maria = [];
+  const main = [];
   const random = [];
+  const mainVideoName = getMainVideoName();
+  const videosFolderName = getVideosFolderName();
+  let folderFound = false;
 
   try {
     const files = fs.readdirSync(root);
@@ -39,21 +91,18 @@ function scanDrive(driveLetter) {
       const ext = path.extname(file).toLowerCase();
       if (!VIDEO_EXTENSIONS.includes(ext)) continue;
       const fullPath = path.join(root, file);
-      if (fs.statSync(fullPath).isFile() && file.toUpperCase().includes('MARIA')) {
-        maria.push(fullPath);
+      if (fs.statSync(fullPath).isFile() && file.toUpperCase().includes(mainVideoName)) {
+        main.push(fullPath);
       }
     }
   } catch {
-    return { maria: [], random: [] };
+    return { main: [], random: [], folderFound: false };
   }
 
-  const videosFolder = path.join(root, 'VIDEOS');
-  const videosFolderLower = path.join(root, 'videos');
-  const target = fs.existsSync(videosFolder) ? videosFolder
-    : fs.existsSync(videosFolderLower) ? videosFolderLower
-    : null;
+  const target = findVideosFolder(root, videosFolderName);
 
   if (target) {
+    folderFound = true;
     try {
       const files = fs.readdirSync(target);
       for (const file of files) {
@@ -69,18 +118,72 @@ function scanDrive(driveLetter) {
     }
   }
 
-  return { maria, random };
+  return { main, random, folderFound };
 }
 
 function scanAllDrives() {
   const drives = getAvailableDrives();
+  const mainVideoName = getMainVideoName();
+  const videosFolderName = getVideosFolderName();
+  console.log(`[Scan] Iniciando scan. mainVideoName="${mainVideoName}", videosFolder="${videosFolderName}", drives=${JSON.stringify(drives)}`);
+
+  // Procura o drive que contém o vídeo principal
   for (const drive of drives) {
     const result = scanDrive(drive);
-    if (result.maria.length > 0) {
-      return { status: 'found', drive: `${drive}:`, maria: result.maria, random: result.random };
+    console.log(`[Scan] Drive ${drive}: main=${result.main.length}, folderFound=${result.folderFound}, random=${result.random.length}`);
+    if (result.main.length > 0) {
+      // Vídeo principal encontrado neste drive
+      if (!result.folderFound) {
+        console.log(`[Scan] Retornando: videos-folder-missing (drive ${drive})`);
+        return {
+          status: 'videos-folder-missing',
+          drive: `${drive}:`,
+          main: result.main,
+          random: [],
+        };
+      }
+      console.log(`[Scan] Retornando: found (drive ${drive})`);
+      return {
+        status: 'found',
+        drive: `${drive}:`,
+        main: result.main,
+        random: result.random,
+      };
     }
   }
-  return { status: 'waiting', maria: [], random: [], drive: '' };
+
+  // Nenhum drive com vídeo principal. Verifica se há algum drive acessível.
+  for (const drive of drives) {
+    try {
+      const root = `${drive}:\\`;
+      fs.readdirSync(root);
+      // Drive acessível, mas sem vídeo principal. Verifica se a pasta existe.
+      const result = scanDrive(drive);
+      console.log(`[Scan] Drive acessivel ${drive}: main=${result.main.length}, folderFound=${result.folderFound}, random=${result.random.length}`);
+      if (!result.folderFound) {
+        console.log(`[Scan] Retornando: both-missing (drive ${drive})`);
+        return {
+          status: 'both-missing',
+          drive: `${drive}:`,
+          main: [],
+          random: [],
+        };
+      }
+      console.log(`[Scan] Retornando: main-missing (drive ${drive})`);
+      return {
+        status: 'main-missing',
+        drive: `${drive}:`,
+        main: [],
+        random: result.random,
+      };
+    } catch (err) {
+      console.log(`[Scan] Drive ${drive} nao acessivel: ${err.message}`);
+      continue;
+    }
+  }
+
+  console.log(`[Scan] Retornando: waiting (nenhum drive acessivel)`);
+  return { status: 'waiting', main: [], random: [], drive: '' };
 }
 
 // ---------------------------------------------------------------------------
@@ -101,6 +204,14 @@ function getMimeType(filePath) {
 // Express Middleware
 // ---------------------------------------------------------------------------
 app.use(express.json());
+
+// CORS for file:// protocol (Electron wait window)
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  next();
+});
 
 // ---------------------------------------------------------------------------
 // API Routes
@@ -172,6 +283,85 @@ app.get('/api/status', (req, res) => {
   res.json({
     status: 'running',
     port: PORT,
+  });
+});
+
+// Update main video name in config
+app.post('/api/config/main-video-name', express.json(), (req, res) => {
+  const { name } = req.body;
+  if (!name || typeof name !== 'string' || name.trim() === '') {
+    return res.status(400).json({ error: 'Nome inválido' });
+  }
+  try {
+    const config = loadConfig();
+    if (!config.media) config.media = {};
+    config.media.mainVideoName = name.trim().toUpperCase();
+    saveConfig(config);
+    res.json({ success: true, mainVideoName: config.media.mainVideoName });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao salvar configuração: ' + err.message });
+  }
+});
+
+// Get current main video name
+app.get('/api/config/main-video-name', (req, res) => {
+  res.json({ mainVideoName: getMainVideoName() });
+});
+
+// Update videos folder name in config
+app.post('/api/config/videos-folder', express.json(), (req, res) => {
+  const { name } = req.body;
+  if (!name || typeof name !== 'string' || name.trim() === '') {
+    return res.status(400).json({ error: 'Nome inválido' });
+  }
+  try {
+    const config = loadConfig();
+    if (!config.media) config.media = {};
+    config.media.videosFolder = name.trim().toLowerCase();
+    saveConfig(config);
+    res.json({ success: true, videosFolder: config.media.videosFolder });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao salvar configuração: ' + err.message });
+  }
+});
+
+// Get current videos folder name
+app.get('/api/config/videos-folder', (req, res) => {
+  res.json({ videosFolder: getVideosFolderName() });
+});
+
+// Update both main video name and videos folder
+app.post('/api/config', express.json(), (req, res) => {
+  const { mainVideoName, videosFolder } = req.body;
+  if ((!mainVideoName || typeof mainVideoName !== 'string' || mainVideoName.trim() === '') &&
+      (!videosFolder || typeof videosFolder !== 'string' || videosFolder.trim() === '')) {
+    return res.status(400).json({ error: 'Pelo menos um campo é obrigatório' });
+  }
+  try {
+    const config = loadConfig();
+    if (!config.media) config.media = {};
+    if (mainVideoName && typeof mainVideoName === 'string' && mainVideoName.trim() !== '') {
+      config.media.mainVideoName = mainVideoName.trim().toUpperCase();
+    }
+    if (videosFolder && typeof videosFolder === 'string' && videosFolder.trim() !== '') {
+      config.media.videosFolder = videosFolder.trim().toLowerCase();
+    }
+    saveConfig(config);
+    res.json({
+      success: true,
+      mainVideoName: config.media.mainVideoName,
+      videosFolder: config.media.videosFolder,
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao salvar configuração: ' + err.message });
+  }
+});
+
+// Get all config
+app.get('/api/config', (req, res) => {
+  res.json({
+    mainVideoName: getMainVideoName(),
+    videosFolder: getVideosFolderName(),
   });
 });
 

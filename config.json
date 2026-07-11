@@ -3,5 +3,9 @@
     "fps": "auto",
     "width": 480,
     "height": 270
+  },
+  "media": {
+    "mainVideoName": "MARIA",
+    "videosFolder": "videos"
   }
 }
