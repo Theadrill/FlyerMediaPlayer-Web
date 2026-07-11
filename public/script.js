@@ -158,13 +158,13 @@ function measureVideoFPS(now, metadata) {
     const fps = Math.round((fpsMeasurements.length - 1) / elapsed);
 
     if (fps > 0 && fps <= 240) {
-      const previewFPS = Math.max(1, Math.round(fps / 2));
       if (window.electronAPI && window.electronAPI.sendDetectedFPS) {
-        window.electronAPI.sendDetectedFPS(previewFPS);
+        window.electronAPI.sendDetectedFPS(fps);
       }
     }
 
     fpsMeasurements = [];
+    return;
   }
 
   if (video && !video.paused && !video.ended) {

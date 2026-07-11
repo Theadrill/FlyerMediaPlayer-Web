@@ -94,6 +94,7 @@ function createPlayerWindow(display) {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js'),
     },
   });
 
@@ -255,11 +256,19 @@ ipcMain.on('restart-app', () => {
   app.exit(0);
 });
 
-ipcMain.on('detected-fps', (_, videoFPS) => {
+ipcMain.on('detected-fps', (_, originalFPS) => {
   if (PREVIEW_FPS_MODE !== 'auto') return;
-  const newMs = Math.round(1000 / videoFPS);
-  console.log(`[Electron] FPS detectado: ${videoFPS}fps -> capture: ${newMs}ms`);
+  const previewFPS = Math.max(1, Math.round(originalFPS / 2));
+  const newMs = Math.round(1000 / previewFPS);
+  console.log(`[Electron] Video FPS detectado: ${originalFPS}fps -> preview FPS: ${previewFPS}fps (capture: ${newMs}ms)`);
   updateCaptureInterval(newMs);
+});
+
+ipcMain.on('advance-video', () => {
+  if (playerWindow && !playerWindow.isDestroyed()) {
+    console.log('[Electron] Advance request received from preview');
+    playerWindow.webContents.executeJavaScript('advanceToNext()').catch(() => {});
+  }
 });
 
 // ---------------------------------------------------------------------------

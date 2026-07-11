@@ -50,6 +50,15 @@
       };
       img.src = data.dataURL;
     });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        if (window.electronAPI && window.electronAPI.requestAdvance) {
+          window.electronAPI.requestAdvance();
+        }
+      }
+    });
   </script>
 </body>
 </html>
