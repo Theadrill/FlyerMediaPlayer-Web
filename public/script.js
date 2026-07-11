@@ -144,9 +144,57 @@ function advanceToNext() {
 // ---------------------------------------------------------------------------
 // Video Events
 // ---------------------------------------------------------------------------
+let fpsMeasurements = [];
+let fpsCallbackId = null;
+const FPS_SAMPLE_COUNT = 10;
+
+function measureVideoFPS(now, metadata) {
+  fpsMeasurements.push(metadata.mediaTime);
+
+  if (fpsMeasurements.length >= FPS_SAMPLE_COUNT) {
+    const first = fpsMeasurements[0];
+    const last = fpsMeasurements[fpsMeasurements.length - 1];
+    const elapsed = last - first;
+    const fps = Math.round((fpsMeasurements.length - 1) / elapsed);
+
+    if (fps > 0 && fps <= 240) {
+      const previewFPS = Math.max(1, Math.round(fps / 2));
+      if (window.electronAPI && window.electronAPI.sendDetectedFPS) {
+        window.electronAPI.sendDetectedFPS(previewFPS);
+      }
+    }
+
+    fpsMeasurements = [];
+  }
+
+  if (video && !video.paused && !video.ended) {
+    fpsCallbackId = video.requestVideoFrameCallback(measureVideoFPS);
+  }
+}
+
+function startFPSMeasurement() {
+  fpsMeasurements = [];
+  if (fpsCallbackId) {
+    video.cancelVideoFrameCallback(fpsCallbackId);
+    fpsCallbackId = null;
+  }
+  if ('requestVideoFrameCallback' in video) {
+    fpsCallbackId = video.requestVideoFrameCallback(measureVideoFPS);
+  }
+}
+
+function stopFPSMeasurement() {
+  if (fpsCallbackId) {
+    video.cancelVideoFrameCallback(fpsCallbackId);
+    fpsCallbackId = null;
+  }
+  fpsMeasurements = [];
+}
+
 video.addEventListener('loadedmetadata', () => {
   const durationMs = video.duration * 1000;
   startProgress(durationMs);
+  startFPSMeasurement();
 });
 
 video.addEventListener('ended', () => {

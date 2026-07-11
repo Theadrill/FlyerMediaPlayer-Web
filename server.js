@@ -2,77 +2,12 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const { execSync } = require('child_process');
-const OBSWebSocket = require('obs-websocket-js').default;
 require('dotenv').config();
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '4600', 10);
-const OBS_HOST = process.env.OBS_WS_HOST || '127.0.0.1';
-const OBS_PORT = parseInt(process.env.OBS_WS_PORT || '4455', 10);
-const OBS_PASSWORD = process.env.OBS_WS_PASSWORD || '';
 const SKIP_DRIVES = ['C', 'D'];
 const VIDEO_EXTENSIONS = ['.mp4'];
-
-// ---------------------------------------------------------------------------
-// OBS WebSocket Client
-// ---------------------------------------------------------------------------
-const obs = new OBSWebSocket();
-let obsConnected = false;
-let obsScenes = [];
-let obsActiveScene = '';
-let obsReconnectTimer = null;
-
-async function connectOBS() {
-  if (obsConnected) return;
-  try {
-    await obs.connect(`ws://${OBS_HOST}:${OBS_PORT}`, OBS_PASSWORD);
-    obsConnected = true;
-    console.log(`[OBS] Conectado em ${OBS_HOST}:${OBS_PORT}`);
-
-    const { scenes } = await obs.call('GetSceneList');
-    obsScenes = scenes.map(s => s.sceneName);
-    obsActiveScene = scenes.find(s => s.sceneIndex === scenes.length - 1)?.sceneName || '';
-
-    await refreshActiveScene();
-  } catch (err) {
-    obsConnected = false;
-    console.log(`[OBS] Falha ao conectar: ${err.message}. Tentando novamente em 5s...`);
-    scheduleOBSReconnect();
-  }
-}
-
-async function refreshActiveScene() {
-  try {
-    const { currentProgramSceneName } = await obs.call('GetCurrentProgramScene');
-    obsActiveScene = currentProgramSceneName || '';
-  } catch {
-    // ignored
-  }
-}
-
-function scheduleOBSReconnect() {
-  if (obsReconnectTimer) clearTimeout(obsReconnectTimer);
-  obsReconnectTimer = setTimeout(connectOBS, 5000);
-}
-
-obs.on('ConnectionClosed', () => {
-  obsConnected = false;
-  console.log('[OBS] Conexão perdida. Reconectando em 5s...');
-  scheduleOBSReconnect();
-});
-
-obs.on('CurrentProgramSceneChanged', (data) => {
-  obsActiveScene = data.sceneName;
-});
-
-obs.on('SceneListChanged', async () => {
-  try {
-    const { scenes } = await obs.call('GetSceneList');
-    obsScenes = scenes.map(s => s.sceneName);
-  } catch {
-    // ignored
-  }
-});
 
 // ---------------------------------------------------------------------------
 // Drive Scanning
@@ -232,37 +167,10 @@ app.get('/api/video', (req, res) => {
   }
 });
 
-// List OBS scenes
-app.get('/api/obs/scenes', (req, res) => {
-  if (!obsConnected) {
-    return res.json({ scenes: [], activeScene: '', connected: false });
-  }
-  res.json({ scenes: obsScenes, activeScene: obsActiveScene, connected: true });
-});
-
-// Switch OBS scene
-app.post('/api/obs/switch-scene', async (req, res) => {
-  const { scene } = req.body;
-  if (!scene || typeof scene !== 'string') {
-    return res.status(400).json({ success: false, error: 'Nome da cena é obrigatório' });
-  }
-  if (!obsConnected) {
-    return res.status(503).json({ success: false, error: 'OBS não conectado' });
-  }
-  try {
-    await obs.call('SetCurrentProgramScene', { sceneName: scene });
-    obsActiveScene = scene;
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
 // Health check
 app.get('/api/status', (req, res) => {
   res.json({
     status: 'running',
-    obsConnected,
     port: PORT,
   });
 });
@@ -277,16 +185,10 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.get('/cenas', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'cenas.html'));
-});
-
 // ---------------------------------------------------------------------------
 // Start
 // ---------------------------------------------------------------------------
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`[Server] FlyerMediaPlayer Web rodando em http://localhost:${PORT}`);
   console.log(`[Server] Player: http://localhost:${PORT}`);
-  console.log(`[Server] Cenas:  http://localhost:${PORT}/cenas`);
-  connectOBS();
 });

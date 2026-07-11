@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FlyerMediaPlayer</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #111;
+      color: #fff;
+      font-family: 'Segoe UI', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      height: 100vh;
+      text-align: center;
+      user-select: none;
+    }
+    .msg {
+      font-size: 14px;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+      opacity: 0.8;
+    }
+    .btn-restart {
+      background: #333;
+      color: #fff;
+      border: 1px solid #555;
+      padding: 6px 16px;
+      font-size: 12px;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+    .btn-restart:hover {
+      background: #444;
+    }
+  </style>
+</head>
+<body>
+  <div class="msg">Aguardando segundo monitor</div>
+  <button class="btn-restart" onclick="window.electronAPI.restart()">Reiniciar</button>
+  <script>
+    // fallback caso preload nao carregue
+  </script>
+</body>
+</html>
