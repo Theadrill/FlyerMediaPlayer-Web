@@ -155,7 +155,14 @@ function createPreviewWindow(display) {
   previewWindow.loadFile(path.join(__dirname, 'public', 'preview.html'));
 
   previewWindow.on('closed', () => {
-    previewWindow = null;
+    // If we still have a player window, the preview was likely closed manually
+    // In this case, quit the entire application
+    if (playerWindow && !playerWindow.isDestroyed()) {
+      console.log('[Electron] Preview window closed manually - exiting application');
+      app.quit();
+    } else {
+      previewWindow = null;
+    }
   });
 }
 
