@@ -65,7 +65,7 @@ function findVideosFolder(root, folderName) {
     const entries = fs.readdirSync(root, { withFileTypes: true });
     for (const entry of entries) {
       if (entry.isDirectory()) {
-        console.log(`[Scan] Pasta encontrada: "${entry.name}" vs "${folderName}" → match: ${entry.name.toLowerCase() === folderName.toLowerCase()}`);
+        console.log(`[Scan] Pasta encontrada: "${entry.name}" vs "${folderName}" = match: ${entry.name.toLowerCase() === folderName.toLowerCase()}`);
         if (entry.name.toLowerCase() === folderName.toLowerCase()) {
           return path.join(root, entry.name);
         }
@@ -334,7 +334,7 @@ app.get('/api/config/videos-folder', (req, res) => {
 app.post('/api/config', express.json(), (req, res) => {
   const { mainVideoName, videosFolder } = req.body;
   if ((!mainVideoName || typeof mainVideoName !== 'string' || mainVideoName.trim() === '') &&
-      (!videosFolder || typeof videosFolder !== 'string' || videosFolder.trim() === '')) {
+    (!videosFolder || typeof videosFolder !== 'string' || videosFolder.trim() === '')) {
     return res.status(400).json({ error: 'Pelo menos um campo é obrigatório' });
   }
   try {
