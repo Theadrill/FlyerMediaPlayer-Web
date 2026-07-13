@@ -10,4 +10,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   sendBothMissing: () => ipcRenderer.send('media-error', 'both-missing'),
   sendMainVideoFound: () => ipcRenderer.send('main-video-found'),
   onShowMainMissingError: (callback) => ipcRenderer.on('show-main-missing-error', callback),
+  toggleAlwaysOnTop: () => ipcRenderer.send('toggle-always-on-top'),
+  moveWindow: (deltaX, deltaY) => ipcRenderer.send('move-window', deltaX, deltaY),
+  showContextMenu: () => ipcRenderer.send('show-context-menu'),
 });

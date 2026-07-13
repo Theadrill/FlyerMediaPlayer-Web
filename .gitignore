@@ -1,2 +1,6 @@
 node_modules/
 .env
+
+# Ignore build directory contents except the executable
+dist/*
+!dist/FlyerMediaPlayer.exe

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, screen, ipcMain } = require('electron');
+const { app, BrowserWindow, screen, ipcMain, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -269,6 +269,57 @@ function handleDisplays() {
 // ---------------------------------------------------------------------------
 // IPC Handlers
 // ---------------------------------------------------------------------------
+ipcMain.on('toggle-always-on-top', () => {
+  if (previewWindow && !previewWindow.isDestroyed()) {
+    const isTop = previewWindow.isAlwaysOnTop();
+    previewWindow.setAlwaysOnTop(!isTop);
+    console.log(`[Electron] Preview window alwaysOnTop set to: ${!isTop}`);
+  }
+});
+
+ipcMain.on('move-window', (event, deltaX, deltaY) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win && !win.isDestroyed()) {
+    const [x, y] = win.getPosition();
+    win.setPosition(x + deltaX, y + deltaY);
+  }
+});
+
+ipcMain.on('show-context-menu', (event) => {
+  const template = [
+    {
+      label: 'PRÓXIMO VÍDEO',
+      click: () => {
+        if (playerWindow && !playerWindow.isDestroyed()) {
+          console.log('[Electron] Context Menu: Advance request');
+          playerWindow.webContents.executeJavaScript('advanceToNext()').catch(() => {});
+        }
+      }
+    },
+    { type: 'separator' },
+    {
+      label: 'REINICIAR',
+      click: () => {
+        console.log('[Electron] Context Menu: Restart app');
+        app.relaunch();
+        app.exit(0);
+      }
+    },
+    {
+      label: 'ENCERRAR',
+      click: () => {
+        console.log('[Electron] Context Menu: Exit app');
+        app.quit();
+      }
+    }
+  ];
+  const menu = Menu.buildFromTemplate(template);
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win && !win.isDestroyed()) {
+    menu.popup({ window: win });
+  }
+});
+
 ipcMain.on('restart-app', () => {
   app.relaunch();
   app.exit(0);

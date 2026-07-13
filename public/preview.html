@@ -51,6 +51,47 @@
       img.src = data.dataURL;
     });
 
+    let isDragging = false;
+    let startX = 0;
+    let startY = 0;
+
+    canvas.addEventListener('mousedown', (e) => {
+      if (e.button === 0) { // Left click only
+        isDragging = true;
+        startX = e.screenX;
+        startY = e.screenY;
+      }
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (isDragging) {
+        const deltaX = e.screenX - startX;
+        const deltaY = e.screenY - startY;
+        startX = e.screenX;
+        startY = e.screenY;
+        if (window.electronAPI && window.electronAPI.moveWindow) {
+          window.electronAPI.moveWindow(deltaX, deltaY);
+        }
+      }
+    });
+
+    window.addEventListener('mouseup', () => {
+      isDragging = false;
+    });
+
+    window.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      if (window.electronAPI && window.electronAPI.showContextMenu) {
+        window.electronAPI.showContextMenu();
+      }
+    });
+
+    canvas.addEventListener('dblclick', () => {
+      if (window.electronAPI && window.electronAPI.toggleAlwaysOnTop) {
+        window.electronAPI.toggleAlwaysOnTop();
+      }
+    });
+
     document.addEventListener('keydown', (e) => {
       if (e.key === 'ArrowRight') {
         e.preventDefault();
